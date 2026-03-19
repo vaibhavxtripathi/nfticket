@@ -74,11 +74,11 @@ impl NFTicketContract {
         event_ledger: u32,
     ) -> u32 {
         organiser.require_auth();
-        assert!(title.len() > 0 && title.len() <= MAX_TITLE, "Title required");
-        assert!(description.len() <= MAX_DESC, "Desc too long");
-        assert!(ticket_price > 0, "Price must be positive");
-        assert!(max_tickets > 0 && max_tickets <= MAX_TICKETS, "1–10000 tickets");
-        assert!(event_ledger > env.ledger().sequence(), "Event must be in the future");
+        assert!(title.len() > 0 && title.len() <= MAX_TITLE);
+        assert!(description.len() <= MAX_DESC);
+        assert!(ticket_price > 0);
+        assert!(max_tickets > 0 && max_tickets <= MAX_TICKETS);
+        assert!(event_ledger > env.ledger().sequence());
 
         let count: u32 = env.storage().instance()
             .get(&DataKey::EventCount).unwrap_or(0u32);
@@ -114,9 +114,9 @@ impl NFTicketContract {
         let mut event: Event = env.storage().persistent()
             .get(&DataKey::Event(event_id)).expect("Event not found");
 
-        assert!(event.active, "Event not active");
-        assert!(event.tickets_sold < event.max_tickets, "Sold out");
-        assert!(env.ledger().sequence() < event.event_ledger, "Event already happened");
+        assert!(event.active);
+        assert!(event.tickets_sold < event.max_tickets);
+        assert!(env.ledger().sequence() < event.event_ledger);
 
         // Pay organiser directly
         let token_client = token::Client::new(&env, &xlm_token);
@@ -165,8 +165,8 @@ impl NFTicketContract {
         let mut ticket: Ticket = env.storage().persistent()
             .get(&DataKey::Ticket(ticket_id)).expect("Ticket not found");
 
-        assert!(ticket.owner == from, "Not the owner");
-        assert!(ticket.status == TicketStatus::Valid, "Ticket not valid");
+        assert!(ticket.owner == from);
+        assert!(ticket.status == TicketStatus::Valid);
 
         // Remove from sender's list
         let mut from_owned: Vec<u64> = env.storage().persistent()
@@ -206,8 +206,8 @@ impl NFTicketContract {
         let event: Event = env.storage().persistent()
             .get(&DataKey::Event(ticket.event_id)).expect("Event not found");
 
-        assert!(event.organiser == organiser, "Not the event organiser");
-        assert!(ticket.status == TicketStatus::Valid, "Ticket not valid or already used");
+        assert!(event.organiser == organiser);
+        assert!(ticket.status == TicketStatus::Valid);
 
         ticket.status  = TicketStatus::Used;
         ticket.used_at = env.ledger().sequence();
