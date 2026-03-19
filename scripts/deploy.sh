@@ -24,13 +24,16 @@ CONTRACT_ID=$(stellar contract deploy --network testnet --source organiser --was
 echo -e "${GREEN}✓ CONTRACT_ID: ${CONTRACT_ID}${NC}"
 
 # Get current ledger to set event in future
-CURRENT_LEDGER=$(stellar ledger latest --network testnet | grep -oP '\d+' | tail -1 2>/dev/null || echo "5000000")
+CURRENT_LEDGER=$(curl -s https://soroban-testnet.stellar.org \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' \
+  | grep -oP '"sequence":\K\d+')
 EVENT_LEDGER=$((CURRENT_LEDGER + 518400))  # ~30 days out
 
 stellar contract invoke --network testnet --source organiser --id ${CONTRACT_ID} \
   -- create_event \
   --organiser ${ORGANISER} \
-  --title '"Stellar Summit 2025 — On-Chain"' \
+  --title '"Stellar Summit 2025 - On-Chain"' \
   --description '"The premier Stellar ecosystem conference. Your ticket is an NFT on the Stellar blockchain."' \
   --ticket_price 5000000 \
   --max_tickets 1000 \
