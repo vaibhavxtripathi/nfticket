@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import {
-  connectWallet, mintTicket, transferTicket, validateTicket,
+  connectWallet, createEvent, mintTicket, transferTicket, validateTicket,
   getEvent, getTicket, getOwnedTickets, getEventCount, getTicketCount,
-  xlm, short, CONTRACT_ID, ORGANISER_ADDRESS,
+  xlm, short, CONTRACT_ID,
 } from './lib/stellar'
 
 // ── QR-style ticket stub pattern ───────────────────────────────────────────
@@ -12,7 +12,7 @@ function TicketStub({ ticket, event, wallet, onAction }) {
   const [busy,         setBusy]         = useState(false)
 
   const isOwner     = wallet && ticket.owner?.toString() === wallet
-  const isOrganiser = wallet && wallet === ORGANISER_ADDRESS
+  const isOrganiser = wallet && event?.organiser?.toString() === wallet
   const isValid     = ticket.status === 'Valid'
   const isUsed      = ticket.status === 'Used'
 
@@ -185,45 +185,15 @@ function CreateEventForm({ wallet, currentLedger, onCreated }) {
     e.preventDefault()
     setBusy(true); setErr('')
     try {
-      const { createEvent } = await import('./lib/stellar').then(m => m)
-      // inline because createEvent isn't exported yet — build from sendTx in stellar.js
-      const StellarSdk = await import('@stellar/stellar-sdk')
-      const { rpc, CONTRACT_ID: cid } = await import('./lib/stellar')
-
-      const account = await rpc.getAccount(wallet)
-      const tx = new StellarSdk.TransactionBuilder(account, {
-        fee: StellarSdk.BASE_FEE,
-        networkPassphrase: (import.meta.env.VITE_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015').trim(),
-      }).addOperation(
-        new StellarSdk.Contract(cid).call(
-          'create_event',
-          StellarSdk.Address.fromString(wallet).toScVal(),
-          StellarSdk.xdr.ScVal.scvString(title),
-          StellarSdk.xdr.ScVal.scvString(desc),
-          new StellarSdk.XdrLargeInt('i128', BigInt(Math.ceil(parseFloat(price) * 10_000_000))).toI128(),
-          StellarSdk.xdr.ScVal.scvU32(parseInt(capacity)),
-          StellarSdk.xdr.ScVal.scvU32(eventLedger),
-        )
-      ).setTimeout(60).build()
-
-      const sim = await rpc.simulateTransaction(tx)
-      if (StellarSdk.rpc.Api.isSimulationError(sim)) throw new Error(sim.error)
-      const prep = StellarSdk.rpc.assembleTransaction(tx, sim).build()
-      const { signTransaction } = await import('@stellar/freighter-api')
-      const res = await signTransaction(prep.toXDR(), {
-        networkPassphrase: (import.meta.env.VITE_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015').trim()
-      })
-      if (res.error) throw new Error(res.error)
-      const signed = StellarSdk.TransactionBuilder.fromXDR(res.signedTxXdr,
-        (import.meta.env.VITE_NETWORK_PASSPHRASE || 'Test SDF Network ; September 2015').trim())
-      const sent = await rpc.sendTransaction(signed)
-      let hash = sent.hash
-      for (let i = 0; i < 30; i++) {
-        const r = await rpc.getTransaction(hash)
-        if (r.status === 'SUCCESS') { onCreated(hash); return }
-        if (r.status === 'FAILED') throw new Error('TX failed')
-        await new Promise(x => setTimeout(x, 2000))
-      }
+      const hash = await createEvent(
+        wallet,
+        title,
+        desc,
+        parseFloat(price),
+        parseInt(capacity),
+        eventLedger
+      )
+      onCreated(hash)
     } catch (e) { setErr(e.message) }
     finally { setBusy(false) }
   }
@@ -288,8 +258,6 @@ export default function App() {
   const [lookupId,      setLookupId]      = useState('')
   const [lookupTicket,  setLookupTicket]  = useState(null)
   const [lookupEvent,   setLookupEvent]   = useState(null)
-
-  const isOrganiser = wallet && wallet === ORGANISER_ADDRESS
 
   const loadData = async () => {
     setLoading(true)
@@ -382,7 +350,7 @@ export default function App() {
 
         <div className="header-right">
           {wallet
-            ? <div className="wallet-pill"><span className="wdot"/>{short(wallet)}{isOrganiser && <span className="org-tag">ORGANISER</span>}</div>
+            ? <div className="wallet-pill"><span className="wdot"/>{short(wallet)}</div>
             : <button className="btn-connect" onClick={handleConnect}>Connect</button>
           }
         </div>
@@ -394,7 +362,7 @@ export default function App() {
           { id:'events',    label:'Events'     },
           { id:'mytickets', label:'My Tickets' },
           { id:'lookup',    label:'Verify'     },
-          ...(isOrganiser ? [{ id:'create', label:'+ Event' }] : []),
+          ...(wallet ? [{ id:'create', label:'+ Event' }] : []),
         ].map(t => (
           <button key={t.id}
             className={`tab-btn ${tab === t.id ? 'tab-active' : ''}`}
@@ -489,17 +457,25 @@ export default function App() {
         )}
 
         {/* ── Create event ── */}
-        {tab === 'create' && isOrganiser && (
+        {tab === 'create' && (
           <div className="page-wrap">
-            <CreateEventForm
-              wallet={wallet}
-              currentLedger={currentLedger}
-              onCreated={(hash) => {
-                showToast(true, 'Event created!', hash)
-                setTab('events')
-                loadData()
-              }}
-            />
+            {!wallet ? (
+              <div className="gate-prompt">
+                <div className="gp-icon">🎟</div>
+                <p>Connect your wallet to create an event.</p>
+                <button className="btn-connect-lg" onClick={handleConnect}>Connect Freighter</button>
+              </div>
+            ) : (
+              <CreateEventForm
+                wallet={wallet}
+                currentLedger={currentLedger}
+                onCreated={(hash) => {
+                  showToast(true, 'Event created!', hash)
+                  setTab('events')
+                  loadData()
+                }}
+              />
+            )}
           </div>
         )}
       </main>

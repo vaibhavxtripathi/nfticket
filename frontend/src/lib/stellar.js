@@ -50,6 +50,19 @@ async function readContract(op) {
 
 const tc = () => new StellarSdk.Contract(CONTRACT_ID)
 
+export async function createEvent(organiser, title, description, priceXlm, maxTickets, eventLedger) {
+  const stroops = Math.ceil(priceXlm * 10_000_000)
+  return sendTx(organiser, tc().call(
+    'create_event',
+    StellarSdk.Address.fromString(organiser).toScVal(),
+    StellarSdk.xdr.ScVal.scvString(title),
+    StellarSdk.xdr.ScVal.scvString(description || ''),
+    new StellarSdk.XdrLargeInt('i128', BigInt(stroops)).toI128(),
+    StellarSdk.xdr.ScVal.scvU32(Number(maxTickets)),
+    StellarSdk.xdr.ScVal.scvU32(Number(eventLedger)),
+  ))
+}
+
 export async function mintTicket(buyer, eventId, priceXlm) {
   const stroops = Math.ceil(priceXlm * 10_000_000)
   await sendTx(buyer, new StellarSdk.Contract(XLM_TOKEN).call(
